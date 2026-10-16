@@ -4,6 +4,7 @@ use clap::{Parser, Subcommand};
 
 use crate::error::Result;
 use crate::firmware::{self, FirmwareCmd};
+use crate::keys::{self, KeysCmd};
 use crate::sak::{self, SakCommand};
 
 /// Toolbox for Nintendo Switch content: firmware installation and format
@@ -21,6 +22,8 @@ pub struct Cli {
 pub enum Command {
     /// Install firmware packages.
     Firmware(FirmwareCmd),
+    /// Install key files.
+    Keys(KeysCmd),
     /// Switch Army Knife style content operations.
     #[command(flatten)]
     Sak(SakCommand),
@@ -30,6 +33,7 @@ pub enum Command {
 pub fn run(cli: Cli) -> Result<()> {
     match cli.command {
         Command::Firmware(cmd) => firmware::run(cmd),
+        Command::Keys(cmd) => keys::run(cmd),
         Command::Sak(cmd) => sak::run(cmd),
     }
 }

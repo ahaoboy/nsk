@@ -1,16 +1,13 @@
 //! Writer for a registered content directory.
 
 use std::fs;
-use std::io::{Read, Write};
+use std::io::Read;
 use std::path::{Path, PathBuf};
 
 use super::layout::RegistryLayout;
 use super::nca::NcaName;
+use crate::archive::write_atomic;
 use crate::error::Result;
-
-/// Size of the blocks used when copying an NCA, mirroring the upstream
-/// `VFS_RC_LARGE_COPY_BLOCK`.
-const COPY_BLOCK: usize = 0x40_0000;
 
 /// An NCA that has been written to disk.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -53,17 +50,17 @@ impl RegisteredCache {
 
     /// Stream one NCA into the cache.
     ///
-    /// Returns `Ok(None)` when the NCA already exists and `overwrite` is
-    /// `false`, so callers can report it as skipped.
+    /// Returns `Ok(None)` when the NCA already exists and `replace` is `false`,
+    /// so callers can report it as skipped.
     pub fn install<R: Read>(
         &self,
         name: NcaName,
         layout: RegistryLayout,
         source: &mut R,
-        overwrite: bool,
+        replace: bool,
     ) -> Result<Option<InstalledNca>> {
         let path = self.path_for(name, layout);
-        if !overwrite && path.is_file() {
+        if !replace && path.is_file() {
             return Ok(None);
         }
 
@@ -81,44 +78,4 @@ impl RegisteredCache {
         let bytes = write_atomic(&path, source)?;
         Ok(Some(InstalledNca { name, path, bytes }))
     }
-}
-
-/// Copy `source` into `path` through a sibling temporary file.
-fn write_atomic<R: Read>(path: &Path, source: &mut R) -> Result<u64> {
-    let tmp = path.with_extension("nsk-part");
-    let written = (|| -> Result<u64> {
-        let mut sink = fs::File::create(&tmp)?;
-        let bytes = copy(source, &mut sink)?;
-        sink.flush()?;
-        Ok(bytes)
-    })();
-
-    match written {
-        Ok(bytes) => {
-            if path.exists() {
-                fs::remove_file(path)?;
-            }
-            fs::rename(&tmp, path)?;
-            Ok(bytes)
-        }
-        Err(err) => {
-            let _ = fs::remove_file(&tmp);
-            Err(err)
-        }
-    }
-}
-
-/// Copy every byte of `source` into `sink`, returning the number of bytes.
-fn copy<R: Read, W: Write>(source: &mut R, sink: &mut W) -> Result<u64> {
-    let mut buffer = vec![0u8; COPY_BLOCK];
-    let mut total = 0u64;
-    loop {
-        let read = source.read(&mut buffer)?;
-        if read == 0 {
-            break;
-        }
-        sink.write_all(&buffer[..read])?;
-        total += read as u64;
-    }
-    Ok(total)
 }

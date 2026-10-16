@@ -1,8 +1,9 @@
 # nsk
 
 A small toolbox for Nintendo Switch content. It currently installs firmware
-packages and reserves the command surface for Switch Army Knife (SAK) style
-format conversion, with each command documented but not yet implemented.
+packages, installs key files, and reserves the command surface for Switch Army
+Knife (SAK) style format conversion, with each SAK command documented but not
+yet implemented.
 
 ## Build
 
@@ -14,12 +15,12 @@ The binary is written to `target/release/nsk`.
 
 ## Features
 
-| Feature | Default | Enables                                                  |
-| ------- | ------- | -------------------------------------------------------- |
-| `cli`   | yes     | The `clap`-based command-line front end (`cli`, `sak`, the `firmware install` command and the `nsk` binary). |
+| Feature | Default | Enables                                                                                          |
+| ------- | ------- | ------------------------------------------------------------------------------------------------ |
+| `cli`   | yes     | The `clap`-based command-line front end (`cli`, `sak`, the `firmware`/`keys` commands and the `nsk` binary). |
 
-The library part (`registry`, `firmware`) has no CLI dependency, so it can be
-used on its own:
+The library part (`registry`, `firmware`, `keys`) has no CLI dependency, so it
+can be used on its own:
 
 ```sh
 cargo build --no-default-features       # library only, no clap
@@ -31,7 +32,7 @@ With `--no-default-features` the `nsk` binary is skipped (it declares
 ## Install firmware
 
 ```sh
-nsk firmware install <PACKAGE> <TARGET> [--layout <LAYOUT>] [--overwrite]
+nsk firmware install <PACKAGE> <TARGET> [--layout <LAYOUT>] [--skip-existing]
 ```
 
 * `PACKAGE` — the firmware `.zip` package. NCAs may be nested in subfolders, so
@@ -40,26 +41,46 @@ nsk firmware install <PACKAGE> <TARGET> [--layout <LAYOUT>] [--overwrite]
 * `TARGET` — the directory that receives the installed content.
 * `--layout` — the directory layout the emulator expects:
 
-  | Layout      | Path                              | Used by                 |
-  | ----------- | --------------------------------- | ----------------------- |
-  | `two-digit` | `<TARGET>/000000XX/<id>.nca`      | yuzu / Eden (`default`) |
-  | `flat`      | `<TARGET>/<id>.nca/00`            | Ryujinx portable        |
+  | Layout      | Path                         | Used by                 |
+  | ----------- | ---------------------------- | ----------------------- |
+  | `flat`      | `<TARGET>/<id>.nca/00`       | eden / yuzu / ruzu (default) |
+  | `two-digit` | `<TARGET>/000000XX/<id>.nca` | bucketed installs       |
 
   The `XX` bucket is the first byte of the SHA-256 over the 16 raw bytes of the
-  NCA id, matching the upstream `RegisteredCache`. The `flat` layout mirrors the
-  reference shell installer, including the trick of relocating a plain
-  `<id>.nca` file out of the way before creating the `<id>.nca/` directory.
-* `--overwrite` — reinstall NCAs that are already present.
+  NCA id, matching the upstream `RegisteredCache`. The default `flat` layout is
+  what the reference shell installer produces, including the trick of relocating
+  a plain `<id>.nca` file out of the way before creating the `<id>.nca/`
+  directory.
+* `--skip-existing` — keep NCAs that are already present. NCAs are content
+  addressed, so the default is to (re)write them, mirroring the `cp -f` in the
+  reference script.
 
-Example:
+## Install keys
 
 ```sh
-# yuzu/Eden
-nsk firmware install "Firmware 16.0.1.zip" ./nand/system/Contents/registered
-
-# Ryujinx portable
-nsk firmware install "Firmware 16.0.1.zip" ./portable/bis/system/Contents/registered --layout flat
+nsk keys install <PACKAGE> <TARGET> [--skip-existing]
 ```
+
+* `PACKAGE` — the key `.zip` package (`prod.keys`, `title.keys`, ...). Files may
+  be nested (for example `Keys-22.1.0/prod.keys`); every `*.keys` entry is
+  installed flat into `TARGET`.
+* `TARGET` — the key directory (for example `user/keys`).
+* `--skip-existing` — keep key files that are already present.
+
+## Packaging example
+
+Both packaging steps of a firmware variant collapse into two commands:
+
+```bash
+variant_root=$(package_root "ruzu-$version")
+
+nsk keys install     "dist/$prodkeys_zip" "$variant_root/user/keys"
+nsk firmware install "dist/$firmware_zip" "$variant_root/user/nand/system/Contents/registered"
+```
+
+This replaces the previous unzip / `find … -exec cp` / `<id>.nca/00`
+reorganisation blocks, and does not need temporary `ProdKeys` / `Firmware`
+directories.
 
 ## Switch Army Knife (reserved)
 
@@ -94,14 +115,16 @@ nsk --help
 
 ## Module map
 
-| Module      | Feature | Responsibility                                                   |
-| ----------- | ------- | ---------------------------------------------------------------- |
-| `registry`  | —       | NCA identifiers, storage layouts and the `RegisteredCache` writer |
-| `firmware`  | —       | `FirmwarePackage` reader; the `firmware install` command with `cli` |
-| `cli`       | `cli`   | Top-level argument parsing and dispatch                          |
-| `sak`       | `cli`   | Reserved SAK command surface, flattened into the top-level CLI   |
-| `error`     | —       | Crate-wide `thiserror` error type                                |
+| Module      | Feature | Responsibility                                                     |
+| ----------- | ------- | ------------------------------------------------------------------ |
+| `registry`  | -       | NCA identifiers, storage layouts and the `RegisteredCache` writer   |
+| `firmware`  | -       | `FirmwarePackage` reader; the `firmware install` command with `cli` |
+| `keys`      | -       | `KeysPackage` reader and `KeyStore`; the `keys install` command with `cli` |
+| `cli`       | `cli`   | Top-level argument parsing and dispatch                            |
+| `sak`       | `cli`   | Reserved SAK command surface, flattened into the top-level CLI     |
+| `error`     | -       | Crate-wide `thiserror` error type                                  |
+| `archive`   | -       | Internal zip/copy plumbing shared by the stores (private)           |
 
 Errors use [`thiserror`](https://docs.rs/thiserror), the CLI is built with
-[`clap`](https://docs.rs/clap) (optional) and the firmware package is read with
+[`clap`](https://docs.rs/clap) (optional) and the packages are read with
 [`zip`](https://docs.rs/zip).

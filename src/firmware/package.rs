@@ -5,6 +5,7 @@ use std::path::{Path, PathBuf};
 
 use zip::ZipArchive;
 
+use crate::archive::base_name;
 use crate::error::{Error, Result};
 use crate::registry::{InstalledNca, NcaId, NcaName, RegisteredCache, RegistryLayout};
 
@@ -46,13 +47,14 @@ impl FirmwarePackage {
 
     /// Install every NCA into `cache`.
     ///
-    /// Returns [`Error::EmptyPackage`] when the archive does not contain a
-    /// single NCA file.
+    /// With `replace` unset, NCAs that are already present are skipped instead
+    /// of being written again. Returns [`Error::EmptyPackage`] when the archive
+    /// does not contain a single NCA file.
     pub fn install(
         &mut self,
         cache: &RegisteredCache,
         layout: RegistryLayout,
-        overwrite: bool,
+        replace: bool,
     ) -> Result<InstallReport> {
         cache.ensure_root()?;
 
@@ -64,15 +66,14 @@ impl FirmwarePackage {
             }
 
             let raw_name = entry.name()?.into_owned();
-            let base = raw_name
-                .rsplit(['/', '\\'])
-                .next()
-                .unwrap_or(raw_name.as_str());
+            let Some(base) = base_name(&raw_name) else {
+                continue;
+            };
             let Some(name) = NcaName::parse(base) else {
                 continue;
             };
 
-            match cache.install(name, layout, &mut entry, overwrite)? {
+            match cache.install(name, layout, &mut entry, replace)? {
                 Some(installed) => report.written.push(installed),
                 None => report.skipped.push(name.id),
             }

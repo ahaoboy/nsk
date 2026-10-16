@@ -35,12 +35,12 @@ pub struct InstallArgs {
     pub target: PathBuf,
 
     /// Directory layout the emulator expects.
-    #[arg(short, long, value_enum, default_value = "two-digit")]
+    #[arg(short, long, value_enum, default_value = "flat")]
     pub layout: RegistryLayout,
 
-    /// Reinstall NCAs that are already present.
+    /// Keep NCAs that are already present instead of replacing them.
     #[arg(long)]
-    pub overwrite: bool,
+    pub skip_existing: bool,
 }
 
 /// Run a firmware command.
@@ -54,7 +54,7 @@ pub fn run(cmd: FirmwareCmd) -> Result<()> {
 fn install(args: InstallArgs) -> Result<()> {
     let mut package = FirmwarePackage::open(&args.package)?;
     let cache = RegisteredCache::new(&args.target);
-    let report = package.install(&cache, args.layout, args.overwrite)?;
+    let report = package.install(&cache, args.layout, !args.skip_existing)?;
 
     println!(
         "Installed {} NCA file(s) into {} ({}, {:.1} MiB)",
@@ -65,7 +65,7 @@ fn install(args: InstallArgs) -> Result<()> {
     );
     if !report.skipped.is_empty() {
         println!(
-            "Skipped {} NCA file(s) that are already present (use --overwrite to reinstall)",
+            "Skipped {} NCA file(s) that are already present",
             report.skipped.len()
         );
     }
