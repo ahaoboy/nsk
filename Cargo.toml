@@ -1,0 +1,22 @@
+[package]
+name = "nsk"
+version = "0.1.0"
+edition = "2024"
+description = "Nintendo Switch content toolbox: firmware installation and format conversion"
+license = "GPL-3.0-or-later"
+
+[features]
+default = ["cli"]
+cli = ["dep:clap"]
+
+[dependencies]
+clap = { version = "4", features = ["derive"], optional = true }
+hex = "0.4"
+sha2 = "0.10"
+thiserror = "2"
+zip = { version = "9", default-features = false, features = ["deflate"] }
+
+[[bin]]
+name = "nsk"
+path = "src/main.rs"
+required-features = ["cli"]
